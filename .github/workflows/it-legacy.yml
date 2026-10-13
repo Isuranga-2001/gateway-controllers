@@ -1,4 +1,8 @@
-name: Gateway Controller Policy Integration Test
+# Runs the policy integration tests through the api-platform test suite. The api-platform checkout
+# is pinned to a fixed commit, so this workflow keeps working when api-platform changes or removes
+# the suite it runs.
+
+name: Gateway Controller Policy Integration Test (legacy)
 
 on:
   workflow_dispatch:
@@ -7,7 +11,7 @@ on:
       - main
     paths:
       - 'policies/**'
-      - '.github/workflows/it.yml'
+      - '.github/workflows/it-legacy.yml'
 
 permissions:
   contents: read
@@ -29,7 +33,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803b # v6
         with:
           repository: wso2/api-platform
-          ref: main
+          ref: bf7d867c12f15bd7a32c1b3a67734a100f34a3b1 # main on 2026-10-12
           path: api-platform
           persist-credentials: false
 
@@ -71,7 +75,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803b # v6
         with:
           repository: wso2/api-platform
-          ref: main
+          ref: bf7d867c12f15bd7a32c1b3a67734a100f34a3b1 # main on 2026-10-12
           path: api-platform
           persist-credentials: false
 

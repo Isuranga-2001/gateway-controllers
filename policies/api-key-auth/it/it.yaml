@@ -1,0 +1,8 @@
+# Integration runners for this policy. The integration suite lives in wso2/api-platform
+# (tests/framework) and discovers this file through the gateway-controller-policies block.
+policy: api-key-auth
+runners:
+  - name: api-key-auth
+    tags: "gateway-version>=1.1.0"
+    features:
+      - features/api_key_auth.feature

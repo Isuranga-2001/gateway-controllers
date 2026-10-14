@@ -43,6 +43,7 @@ import (
 	"github.com/wso2/api-platform/tests/framework/core/suiterun"
 	"github.com/wso2/api-platform/tests/framework/core/topology"
 
+	"github.com/wso2/gateway-controllers/tests/it/common/resources"
 	"github.com/wso2/gateway-controllers/tests/it/common/steps"
 	"github.com/wso2/gateway-controllers/tests/it/common/steps/platformgateway"
 )
@@ -51,8 +52,9 @@ import (
 // framework leaves it out of the policy it builds into the gateway, and so does staging.
 const policyIntegrationDir = "it"
 
-// overlaysDir holds the overlays a policy's suite file names; the framework resolves them from the workspace.
-const overlaysDir = "overlays"
+// workspaceDir holds the files a policy's suite needs at the workspace root, where the framework
+// resolves overlays and component files. They are staged after the shared ones and replace them.
+const workspaceDir = "workspace"
 
 // ControllerPolicies are the policies the gateway controller requires to create LLM providers, LLM
 // proxies and their authentication: it attaches them to the resources it generates and rejects a
@@ -127,7 +129,7 @@ func pinnedTestbenchImage(goMod []byte) (string, bool) {
 // Run executes the suite declared in it-suite.yaml in the working directory, which `go test` sets
 // to the policy's it folder. The gateway is built from the policy, ControllerPolicies and
 // cfg.Companions: their folders are staged as the policy tree of a temporary workspace that the
-// suite file's addPoliciesFrom names. The folder's overlays are staged beside it.
+// suite file's addPoliciesFrom names. The shared and the folder's workspace files are staged beside it.
 func Run(t *testing.T, cfg Config) {
 	t.Helper()
 	dir, err := os.Getwd()
@@ -138,8 +140,11 @@ func Run(t *testing.T, cfg Config) {
 	if err := StagePolicy(dir, workspace, append(slices.Clone(ControllerPolicies), cfg.Companions...)...); err != nil {
 		t.Fatalf("staging the policy: %v", err)
 	}
-	if err := StageOverlays(dir, workspace); err != nil {
-		t.Fatalf("staging the overlays: %v", err)
+	if err := stagePlatformAPI(filepath.Join(dir, suiterun.DefaultSuiteFile), workspace); err != nil {
+		t.Fatalf("staging the platform-api files: %v", err)
+	}
+	if err := StageWorkspace(dir, workspace); err != nil {
+		t.Fatalf("staging the workspace files: %v", err)
 	}
 	if reason := excludedEverywhere(suiterun.Selection(), filepath.Join(dir, suiterun.DefaultSuiteFile)); reason != nil {
 		t.Skipf("nothing to run: %v", reason)
@@ -200,9 +205,25 @@ func StagePolicy(suiteDir, workspace string, companions ...string) error {
 	return nil
 }
 
-// StageOverlays copies the policy's overlays folder to <workspace>/overlays, if it has one.
-func StageOverlays(suiteDir, workspace string) error {
-	source := filepath.Join(suiteDir, overlaysDir)
+var platformAPIComponent = regexp.MustCompile(`(?m)^\s*-\s*name:\s*platform-api\s*$`)
+
+// stagePlatformAPI stages the shared Platform API files at the workspace root when the suite file
+// runs the platform-api component, which the framework module cannot run without them.
+func stagePlatformAPI(suiteFile, workspace string) error {
+	content, err := os.ReadFile(suiteFile)
+	if err != nil || !platformAPIComponent.Match(content) {
+		return nil
+	}
+	files, err := fs.Sub(resources.PlatformAPI, "platformapi")
+	if err != nil {
+		return err
+	}
+	return copyFS(files, workspace)
+}
+
+// StageWorkspace copies the policy's workspace folder to the root of the workspace, if it has one.
+func StageWorkspace(suiteDir, workspace string) error {
+	source := filepath.Join(suiteDir, workspaceDir)
 	info, err := os.Stat(source)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
@@ -213,23 +234,24 @@ func StageOverlays(suiteDir, workspace string) error {
 	if !info.IsDir() {
 		return fmt.Errorf("%q is not a folder", source)
 	}
-	destination := filepath.Join(workspace, overlaysDir)
-	return filepath.WalkDir(source, func(path string, entry fs.DirEntry, err error) error {
+	return copyFS(os.DirFS(source), workspace)
+}
+
+// copyFS copies the files under fsys to destination, replacing files that exist, and refuses a
+// symlink.
+func copyFS(fsys fs.FS, destination string) error {
+	return fs.WalkDir(fsys, ".", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		relative, err := filepath.Rel(source, path)
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(destination, relative)
+		target := filepath.Join(destination, filepath.FromSlash(path))
 		switch {
 		case entry.Type()&fs.ModeSymlink != 0:
-			return fmt.Errorf("symlink %q is not allowed in an overlays folder", path)
+			return fmt.Errorf("symlink %q is not allowed in a workspace folder", path)
 		case entry.IsDir():
 			return os.MkdirAll(target, 0o755)
 		default:
-			content, err := os.ReadFile(path)
+			content, err := fs.ReadFile(fsys, path)
 			if err != nil {
 				return err
 			}

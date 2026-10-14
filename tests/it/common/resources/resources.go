@@ -16,9 +16,10 @@
  * under the License.
  */
 
-// Package resources holds the canonical resource templates every policy suite shares. A suite
-// that needs a different template puts a file of the same name in its own
-// resources/templates directory; that file replaces the shared one.
+// Package resources holds the files every policy suite shares: the canonical resource templates,
+// and the Platform API files the framework module does not embed. A suite that needs a different
+// template puts a file of the same name in its own resources/templates directory; that file
+// replaces the shared one.
 package resources
 
 import "embed"
@@ -27,3 +28,11 @@ import "embed"
 //
 //go:embed templates/*.yaml
 var Templates embed.FS
+
+// PlatformAPI holds the files the framework reads from the workspace to run the platform-api
+// component, at their workspace paths under platformapi/. The configuration and role-to-scope
+// mapping are those of api-platform tag platform-api/v0.16.0, so a suite that runs platform-api
+// pins that image version.
+//
+//go:embed all:platformapi
+var PlatformAPI embed.FS

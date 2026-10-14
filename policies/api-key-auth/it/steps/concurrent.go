@@ -62,24 +62,21 @@ type concurrentCyclingOutcome struct {
 	requestErr error
 }
 
-func concurrentCyclingRows(ctx context.Context, table *godog.Table) ([]concurrentCyclingRow, error) {
-	if table == nil || len(table.Rows) == 0 {
+func concurrentCyclingRows(ctx context.Context, cells [][2]string) ([]concurrentCyclingRow, error) {
+	if len(cells) == 0 {
 		return nil, fmt.Errorf("cycling values table must not be empty")
 	}
-	rows := make([]concurrentCyclingRow, 0, len(table.Rows))
-	for i, row := range table.Rows {
-		if row == nil || len(row.Cells) != 2 {
-			return nil, fmt.Errorf("cycling values row %d must contain exactly two cells", i+1)
-		}
-		status, err := strconv.Atoi(strings.TrimSpace(row.Cells[1].Value))
+	rows := make([]concurrentCyclingRow, 0, len(cells))
+	for i, cell := range cells {
+		status, err := strconv.Atoi(strings.TrimSpace(cell[1]))
 		if err != nil {
-			return nil, fmt.Errorf("cycling values row %d: invalid status %q: %w", i+1, row.Cells[1].Value, err)
+			return nil, fmt.Errorf("cycling values row %d: invalid status %q: %w", i+1, cell[1], err)
 		}
-		if strings.TrimSpace(row.Cells[0].Value) == absentHeaderMarker {
+		if strings.TrimSpace(cell[0]) == absentHeaderMarker {
 			rows = append(rows, concurrentCyclingRow{absent: true, status: status})
 			continue
 		}
-		value, err := stepscommon.Expand(ctx, row.Cells[0].Value)
+		value, err := stepscommon.Expand(ctx, cell[0])
 		if err != nil {
 			return nil, err
 		}
@@ -92,6 +89,16 @@ func concurrentCyclingRows(ctx context.Context, table *godog.Table) ([]concurren
 func (s *Steps) sendConcurrentCyclingRequests(
 	ctx context.Context, n int, method, path, header string, table *godog.Table,
 ) error {
+	cells, err := tableRows(table)
+	if err != nil {
+		return err
+	}
+	return s.sendConcurrentCycling(ctx, n, method, path, header, cells)
+}
+
+func (s *Steps) sendConcurrentCycling(
+	ctx context.Context, n int, method, path, header string, cells [][2]string,
+) error {
 	if n <= 0 {
 		return fmt.Errorf("concurrent request count must be positive, got %d", n)
 	}
@@ -103,7 +110,7 @@ func (s *Steps) sendConcurrentCyclingRequests(
 	if err != nil {
 		return err
 	}
-	rows, err := concurrentCyclingRows(ctx, table)
+	rows, err := concurrentCyclingRows(ctx, cells)
 	if err != nil {
 		return err
 	}

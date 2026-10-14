@@ -184,6 +184,21 @@ func (s *Steps) sendRequestOverHTTP2(ctx context.Context, method, path string) e
 	})
 }
 
+// tableRows returns the two cells of each row of a two-column table.
+func tableRows(table *godog.Table) ([][2]string, error) {
+	if table == nil || len(table.Rows) == 0 {
+		return nil, fmt.Errorf("table must not be empty")
+	}
+	rows := make([][2]string, 0, len(table.Rows))
+	for i, row := range table.Rows {
+		if row == nil || len(row.Cells) != 2 {
+			return nil, fmt.Errorf("table row %d must contain exactly two cells", i+1)
+		}
+		rows = append(rows, [2]string{row.Cells[0].Value, row.Cells[1].Value})
+	}
+	return rows, nil
+}
+
 func readBody(r io.Reader) ([]byte, error) {
 	body, err := io.ReadAll(io.LimitReader(r, maxResponseBodyBytes+1))
 	if err != nil {
@@ -203,6 +218,14 @@ type rawHeader struct {
 // sendRawRequestWithHeaders writes the header rows to the wire as given, for requests the
 // standard client cannot express: preserved casing, unnormalized values, duplicate headers.
 func (s *Steps) sendRawRequestWithHeaders(ctx context.Context, method, path string, table *godog.Table) error {
+	rows, err := tableRows(table)
+	if err != nil {
+		return err
+	}
+	return s.sendRawRequest(ctx, method, path, rows)
+}
+
+func (s *Steps) sendRawRequest(ctx context.Context, method, path string, rows [][2]string) error {
 	resolved, err := stepscommon.Expand(ctx, path)
 	if err != nil {
 		return err
@@ -212,7 +235,7 @@ func (s *Steps) sendRawRequestWithHeaders(ctx context.Context, method, path stri
 	}
 	method = strings.ToUpper(method)
 
-	headers, err := rawHeaderLines(ctx, table)
+	headers, err := rawHeaderLines(ctx, rows)
 	if err != nil {
 		return err
 	}
@@ -273,20 +296,17 @@ func (s *Steps) sendRawRequestWithHeaders(ctx context.Context, method, path stri
 	})
 }
 
-func rawHeaderLines(ctx context.Context, table *godog.Table) ([]rawHeader, error) {
-	if table == nil || len(table.Rows) == 0 {
+func rawHeaderLines(ctx context.Context, rows [][2]string) ([]rawHeader, error) {
+	if len(rows) == 0 {
 		return nil, fmt.Errorf("raw request headers table must not be empty")
 	}
-	headers := make([]rawHeader, 0, len(table.Rows))
-	for i, row := range table.Rows {
-		if row == nil || len(row.Cells) != 2 {
-			return nil, fmt.Errorf("raw request headers row %d must contain exactly two cells", i+1)
-		}
-		name := strings.TrimSpace(row.Cells[0].Value)
+	headers := make([]rawHeader, 0, len(rows))
+	for i, row := range rows {
+		name := strings.TrimSpace(row[0])
 		if name == "" {
 			return nil, fmt.Errorf("raw request headers row %d has an empty header name", i+1)
 		}
-		expanded, err := stepscommon.Expand(ctx, row.Cells[1].Value)
+		expanded, err := stepscommon.Expand(ctx, row[1])
 		if err != nil {
 			return nil, err
 		}

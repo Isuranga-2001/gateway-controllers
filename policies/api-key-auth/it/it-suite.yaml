@@ -63,6 +63,7 @@ blocks:
     parallel: 1
     components:
       - name: platform-api
+        version: 0.16.0
         db: sqlite
       - name: platform-gateway
         dependsOn: [platform-api]

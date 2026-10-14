@@ -32,8 +32,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cucumber/godog"
-	"github.com/cucumber/messages/go/v34"
 	"github.com/stretchr/testify/require"
 
 	"github.com/wso2/api-platform/tests/framework/core/components"
@@ -81,15 +79,7 @@ func newStepsWithServer(t *testing.T, handler http.HandlerFunc) *Steps {
 	return steps
 }
 
-func table(rows ...[2]string) *godog.Table {
-	result := &godog.Table{}
-	for _, row := range rows {
-		result.Rows = append(result.Rows, &messages.PickleTableRow{Cells: []*messages.PickleTableCell{
-			{Value: row[0]}, {Value: row[1]},
-		}})
-	}
-	return result
-}
+func cells(pairs ...[2]string) [][2]string { return pairs }
 
 func TestGenerateSizedValueExactLength(t *testing.T) {
 	ctx := newScenarioContext()
@@ -209,7 +199,7 @@ func TestSendRawRequestKeepsHeaderOrderCasingAndDuplicates(t *testing.T) {
 	steps.funnel = httpx.NewFunnel(httpx.NewClient(httpx.Options{Timeout: 5 * time.Second}), 0, 0)
 	ctx := newScenarioContext()
 
-	require.NoError(t, steps.sendRawRequestWithHeaders(ctx, "get", "ctx/probe", table(
+	require.NoError(t, steps.sendRawRequest(ctx, "get", "ctx/probe", cells(
 		[2]string{"api-KEY", "first"},
 		[2]string{"api-KEY", "second"},
 		[2]string{"X-Tab", `a\tb`},
@@ -249,7 +239,7 @@ func TestDecodeRawHeaderValue(t *testing.T) {
 }
 
 func TestRawHeaderLinesPreservesOrderAndDuplicates(t *testing.T) {
-	headers, err := rawHeaderLines(context.Background(), table(
+	headers, err := rawHeaderLines(context.Background(), cells(
 		[2]string{"API-Key", "first"},
 		[2]string{"API-Key", "second"},
 		[2]string{"x-api-key", `\t`},
@@ -266,22 +256,16 @@ func TestRawHeaderLinesExpandsContextValues(t *testing.T) {
 	ctx := newScenarioContext()
 	require.NoError(t, tcontext.Set(ctx, "akaKey", "secret-value"))
 
-	headers, err := rawHeaderLines(ctx, table([2]string{"API-Key", "${CTX:akaKey}"}))
+	headers, err := rawHeaderLines(ctx, cells([2]string{"API-Key", "${CTX:akaKey}"}))
 	require.NoError(t, err)
 	require.Equal(t, []rawHeader{{name: "API-Key", value: "secret-value"}}, headers)
 }
 
 func TestRawHeaderLinesRejectsInvalidTables(t *testing.T) {
-	_, err := rawHeaderLines(context.Background(), &godog.Table{})
+	_, err := rawHeaderLines(context.Background(), nil)
 	require.Error(t, err, "empty table")
 
-	malformed := &godog.Table{Rows: []*messages.PickleTableRow{
-		{Cells: []*messages.PickleTableCell{{Value: "API-Key"}}},
-	}}
-	_, err = rawHeaderLines(context.Background(), malformed)
-	require.Error(t, err, "row with one cell")
-
-	_, err = rawHeaderLines(context.Background(), table([2]string{"  ", "value"}))
+	_, err = rawHeaderLines(context.Background(), cells([2]string{"  ", "value"}))
 	require.Error(t, err, "empty header name")
 }
 
@@ -289,7 +273,7 @@ func TestConcurrentCyclingRowsParsesValuesAndAbsentMarker(t *testing.T) {
 	ctx := newScenarioContext()
 	require.NoError(t, tcontext.Set(ctx, "k1", "secret-value"))
 
-	rows, err := concurrentCyclingRows(ctx, table(
+	rows, err := concurrentCyclingRows(ctx, cells(
 		[2]string{"${CTX:k1}", "200"},
 		[2]string{"bad", "401"},
 		[2]string{absentHeaderMarker, "401"},
@@ -317,7 +301,7 @@ func TestSendConcurrentCyclingRequestsRecordsEachOutcome(t *testing.T) {
 	})
 	ctx := newScenarioContext()
 
-	require.NoError(t, steps.sendConcurrentCyclingRequests(ctx, 30, "GET", "/probe", "API-Key", table(
+	require.NoError(t, steps.sendConcurrentCycling(ctx, 30, "GET", "/probe", "API-Key", cells(
 		[2]string{"good", "200"},
 		[2]string{"bad", "401"},
 		[2]string{absentHeaderMarker, "401"},
@@ -325,7 +309,7 @@ func TestSendConcurrentCyclingRequestsRecordsEachOutcome(t *testing.T) {
 	require.NoError(t, steps.everyConcurrentResponseMatchesExpectedStatus(ctx))
 	require.EqualValues(t, 10, absent.Load(), "every third request omits the header")
 
-	require.Error(t, steps.sendConcurrentCyclingRequests(ctx, 0, "GET", "/probe", "API-Key", table([2]string{"good", "200"})))
+	require.Error(t, steps.sendConcurrentCycling(ctx, 0, "GET", "/probe", "API-Key", cells([2]string{"good", "200"})))
 }
 
 func TestEveryConcurrentResponseMatchesExpectedStatus(t *testing.T) {

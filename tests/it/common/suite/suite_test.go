@@ -212,26 +212,21 @@ func TestStagePolicyRefusesSymlinks(t *testing.T) {
 	require.ErrorContains(t, StagePolicy(filepath.Join(policy, "it"), t.TempDir()), "symlink")
 }
 
-func TestStageOverlaysCopiesTheOverlaysFolderToTheWorkspace(t *testing.T) {
-	suiteDir := filepath.Join(t.TempDir(), "policies", "sample-policy", "it")
-	writeFile(t, filepath.Join(suiteDir, "overlays", "timeout.toml"), "[router]\n")
-	writeFile(t, filepath.Join(suiteDir, "overlays", "nested", "other.toml"), "[other]\n")
-	writeFile(t, filepath.Join(suiteDir, "features", "sample.feature"), "Feature: sample\n")
-	workspace := t.TempDir()
+func TestStagePlatformAPIStagesTheSharedFilesOnlyForASuiteThatRunsPlatformAPI(t *testing.T) {
+	gatewayOnly := filepath.Join(t.TempDir(), "it-suite.yaml")
+	writeFile(t, gatewayOnly, "blocks:\n  - name: sample\n    components:\n      - name: platform-gateway\n")
+	withControlPlane := filepath.Join(t.TempDir(), "it-suite.yaml")
+	writeFile(t, withControlPlane, "blocks:\n  - name: sample\n    components:\n      - name: platform-api\n")
 
-	require.NoError(t, StageOverlays(suiteDir, workspace))
+	skipped := t.TempDir()
+	require.NoError(t, stagePlatformAPI(gatewayOnly, skipped))
+	entries, err := os.ReadDir(skipped)
+	require.NoError(t, err)
+	require.Empty(t, entries)
 
-	require.FileExists(t, filepath.Join(workspace, "overlays", "timeout.toml"))
-	require.FileExists(t, filepath.Join(workspace, "overlays", "nested", "other.toml"))
-	require.NoDirExists(t, filepath.Join(workspace, "features"))
-}
-
-func TestStageOverlaysStagesNothingForAPolicyWithoutOverlays(t *testing.T) {
-	suiteDir := filepath.Join(t.TempDir(), "policies", "sample-policy", "it")
-	writeFile(t, filepath.Join(suiteDir, "it-suite.yaml"), "suite: sample\n")
-	workspace := t.TempDir()
-
-	require.NoError(t, StageOverlays(suiteDir, workspace))
-
-	require.NoDirExists(t, filepath.Join(workspace, "overlays"))
+	staged := t.TempDir()
+	require.NoError(t, stagePlatformAPI(withControlPlane, staged))
+	require.FileExists(t, filepath.Join(staged, "platform-api", "config", "config.toml"))
+	require.FileExists(t, filepath.Join(staged, "platform-api", "resources", "role-to-scope-mapping.yaml"))
+	require.FileExists(t, filepath.Join(staged, "tests", "framework", "core", "catalog", "platformapi", "docker-compose.yaml"))
 }

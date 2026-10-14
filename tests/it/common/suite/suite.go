@@ -43,6 +43,7 @@ import (
 	"github.com/wso2/api-platform/tests/framework/core/suiterun"
 	"github.com/wso2/api-platform/tests/framework/core/topology"
 
+	"github.com/wso2/gateway-controllers/tests/it/common/resources"
 	"github.com/wso2/gateway-controllers/tests/it/common/steps"
 	"github.com/wso2/gateway-controllers/tests/it/common/steps/platformgateway"
 )
@@ -143,6 +144,9 @@ func Run(t *testing.T, cfg Config) {
 	if err := StageOverlays(dir, workspace); err != nil {
 		t.Fatalf("staging the overlays: %v", err)
 	}
+	if err := stagePlatformAPI(filepath.Join(dir, suiterun.DefaultSuiteFile), workspace); err != nil {
+		t.Fatalf("staging the platform-api files: %v", err)
+	}
 	if reason := excludedEverywhere(suiterun.Selection(), filepath.Join(dir, suiterun.DefaultSuiteFile)); reason != nil {
 		t.Skipf("nothing to run: %v", reason)
 	}
@@ -218,6 +222,40 @@ func StageOverlays(suiteDir, workspace string) error {
 		return fmt.Errorf("%q is not a folder", source)
 	}
 	return copyTree(source, filepath.Join(workspace, overlaysDir))
+}
+
+var platformAPIComponent = regexp.MustCompile(`(?m)^\s*-\s*name:\s*platform-api\s*$`)
+
+// stagePlatformAPI stages the shared Platform API files at the workspace root when the suite file
+// runs the platform-api component, which the framework module cannot run without them.
+func stagePlatformAPI(suiteFile, workspace string) error {
+	content, err := os.ReadFile(suiteFile)
+	if err != nil || !platformAPIComponent.Match(content) {
+		return nil
+	}
+	files, err := fs.Sub(resources.PlatformAPI, "platformapi")
+	if err != nil {
+		return err
+	}
+	return copyFS(files, workspace)
+}
+
+// copyFS copies the files under fsys to destination, replacing files that exist.
+func copyFS(fsys fs.FS, destination string) error {
+	return fs.WalkDir(fsys, ".", func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(destination, filepath.FromSlash(path))
+		if entry.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		content, err := fs.ReadFile(fsys, path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, content, 0o644)
+	})
 }
 
 func stageOne(source, destination string) error {

@@ -71,6 +71,10 @@ type Config struct {
 	// Register binds the steps only this policy needs, after the shared steps are bound. It is
 	// optional. A step defined here must not repeat a shared one.
 	Register func(sc *godog.ScenarioContext, topo *frameworkruntime.Topology)
+
+	// RegisterWithBase is Register for steps that build on the shared request steps. It also
+	// receives the shared steps' base, and runs after Register. It is optional.
+	RegisterWithBase func(sc *godog.ScenarioContext, base *steps.Base, topo *frameworkruntime.Topology)
 }
 
 // Main parses the suite flags and runs the tests. Call it from TestMain.
@@ -263,6 +267,9 @@ func options(cfg Config) suiterun.Options {
 				shared.Register(sc)
 				if cfg.Register != nil {
 					cfg.Register(sc, topo)
+				}
+				if cfg.RegisterWithBase != nil {
+					cfg.RegisterWithBase(sc, shared.Base, topo)
 				}
 			}, nil
 		},

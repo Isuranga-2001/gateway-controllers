@@ -211,3 +211,27 @@ func TestStagePolicyRefusesSymlinks(t *testing.T) {
 
 	require.ErrorContains(t, StagePolicy(filepath.Join(policy, "it"), t.TempDir()), "symlink")
 }
+
+func TestStageOverlaysCopiesTheOverlaysFolderToTheWorkspace(t *testing.T) {
+	suiteDir := filepath.Join(t.TempDir(), "policies", "sample-policy", "it")
+	writeFile(t, filepath.Join(suiteDir, "overlays", "timeout.toml"), "[router]\n")
+	writeFile(t, filepath.Join(suiteDir, "overlays", "nested", "other.toml"), "[other]\n")
+	writeFile(t, filepath.Join(suiteDir, "features", "sample.feature"), "Feature: sample\n")
+	workspace := t.TempDir()
+
+	require.NoError(t, StageOverlays(suiteDir, workspace))
+
+	require.FileExists(t, filepath.Join(workspace, "overlays", "timeout.toml"))
+	require.FileExists(t, filepath.Join(workspace, "overlays", "nested", "other.toml"))
+	require.NoDirExists(t, filepath.Join(workspace, "features"))
+}
+
+func TestStageOverlaysStagesNothingForAPolicyWithoutOverlays(t *testing.T) {
+	suiteDir := filepath.Join(t.TempDir(), "policies", "sample-policy", "it")
+	writeFile(t, filepath.Join(suiteDir, "it-suite.yaml"), "suite: sample\n")
+	workspace := t.TempDir()
+
+	require.NoError(t, StageOverlays(suiteDir, workspace))
+
+	require.NoDirExists(t, filepath.Join(workspace, "overlays"))
+}

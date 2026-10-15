@@ -236,11 +236,20 @@ func stagePlatformAPI(suiteFile, workspace string) error {
 	if !platformAPIComponent.Match(content) {
 		return nil
 	}
-	files, err := fs.Sub(resources.PlatformAPI, "platformapi")
-	if err != nil {
-		return err
+	for name, path := range resources.PlatformAPIFiles {
+		file, err := resources.PlatformAPI.ReadFile("platformapi/" + name)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(workspace, filepath.FromSlash(path))
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(target, file, 0o644); err != nil {
+			return err
+		}
 	}
-	return copyFS(files, workspace)
+	return nil
 }
 
 // copyFS copies the files under fsys to destination, replacing files that exist.

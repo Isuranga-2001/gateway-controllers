@@ -30,9 +30,15 @@ import "embed"
 var Templates embed.FS
 
 // PlatformAPI holds the files the framework reads from the workspace to run the platform-api
-// component, at their workspace paths under platformapi/. The configuration and role-to-scope
-// mapping are those of api-platform tag platform-api/v0.16.0, so a suite that runs platform-api
-// pins that image version.
+// component, for the latest platform-api image. The configuration and role-to-scope mapping are
+// those of api-platform main at commit 54862c582; refresh them when the image's needs change.
 //
-//go:embed all:platformapi
+//go:embed platformapi
 var PlatformAPI embed.FS
+
+// PlatformAPIFiles maps each file of PlatformAPI to the workspace path the framework reads it from.
+var PlatformAPIFiles = map[string]string{
+	"docker-compose.yaml":        "tests/framework/core/catalog/platformapi/docker-compose.yaml",
+	"config.toml":                "platform-api/config/config.toml",
+	"role-to-scope-mapping.yaml": "platform-api/resources/role-to-scope-mapping.yaml",
+}

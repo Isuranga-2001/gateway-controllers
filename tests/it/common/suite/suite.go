@@ -230,7 +230,10 @@ var platformAPIComponent = regexp.MustCompile(`(?m)^\s*-\s*name:\s*platform-api\
 // runs the platform-api component, which the framework module cannot run without them.
 func stagePlatformAPI(suiteFile, workspace string) error {
 	content, err := os.ReadFile(suiteFile)
-	if err != nil || !platformAPIComponent.Match(content) {
+	if err != nil {
+		return err
+	}
+	if !platformAPIComponent.Match(content) {
 		return nil
 	}
 	files, err := fs.Sub(resources.PlatformAPI, "platformapi")

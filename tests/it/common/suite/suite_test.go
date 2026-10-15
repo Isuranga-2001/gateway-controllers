@@ -230,3 +230,7 @@ func TestStagePlatformAPIStagesTheSharedFilesOnlyForASuiteThatRunsPlatformAPI(t 
 	require.FileExists(t, filepath.Join(staged, "platform-api", "resources", "role-to-scope-mapping.yaml"))
 	require.FileExists(t, filepath.Join(staged, "tests", "framework", "core", "catalog", "platformapi", "docker-compose.yaml"))
 }
+
+func TestStagePlatformAPIReportsASuiteFileItCannotRead(t *testing.T) {
+	require.Error(t, stagePlatformAPI(filepath.Join(t.TempDir(), "missing.yaml"), t.TempDir()))
+}

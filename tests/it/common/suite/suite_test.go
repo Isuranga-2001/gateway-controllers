@@ -241,6 +241,10 @@ func TestStagePlatformAPIStagesTheSharedFilesOnlyForASuiteThatRunsPlatformAPI(t 
 	require.FileExists(t, filepath.Join(staged, "tests", "framework", "core", "catalog", "platformapi", "docker-compose.yaml"))
 }
 
+func TestStagePlatformAPIReportsASuiteFileItCannotRead(t *testing.T) {
+	require.Error(t, stagePlatformAPI(filepath.Join(t.TempDir(), "missing.yaml"), t.TempDir()))
+}
+
 func TestStageWorkspaceReplacesAStagedSharedFile(t *testing.T) {
 	suiteFile := filepath.Join(t.TempDir(), "policies", "sample-policy", "it", "it-suite.yaml")
 	writeFile(t, suiteFile, "blocks:\n  - name: sample\n    components:\n      - name: platform-api\n")

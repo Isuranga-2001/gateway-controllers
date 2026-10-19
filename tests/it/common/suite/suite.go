@@ -252,24 +252,6 @@ func stagePlatformAPI(suiteFile, workspace string) error {
 	return nil
 }
 
-// copyFS copies the files under fsys to destination, replacing files that exist.
-func copyFS(fsys fs.FS, destination string) error {
-	return fs.WalkDir(fsys, ".", func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		target := filepath.Join(destination, filepath.FromSlash(path))
-		if entry.IsDir() {
-			return os.MkdirAll(target, 0o755)
-		}
-		content, err := fs.ReadFile(fsys, path)
-		if err != nil {
-			return err
-		}
-		return os.WriteFile(target, content, 0o644)
-	})
-}
-
 func stageOne(source, destination string) error {
 	if _, err := os.Stat(filepath.Join(source, "policy-definition.yaml")); err != nil {
 		return fmt.Errorf("%q is not a policy folder: %w", source, err)

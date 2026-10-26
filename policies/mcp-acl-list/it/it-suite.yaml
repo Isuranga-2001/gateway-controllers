@@ -45,6 +45,10 @@ blocks:
         addPoliciesFrom: policies
       - name: testbench
     runners:
-      - name: mcp-acl-list
+      - name: mcp-acl-list-policy
+        tags: "gateway-version>1.2.0"
         features:
           - features/mcp_acl_list.feature
+      - name: mcp-acl-list
+        features:
+          - features/mcp_acl_list_error_compatibility.feature

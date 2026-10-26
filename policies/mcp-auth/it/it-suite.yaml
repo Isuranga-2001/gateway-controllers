@@ -46,6 +46,10 @@ blocks:
         overlay: overlays/gateway.toml
       - name: testbench
     runners:
-      - name: mcp-auth
+      - name: mcp-auth-policy
+        tags: "gateway-version>1.2.0"
         features:
           - features/mcp_auth.feature
+      - name: mcp-auth
+        features:
+          - features/mcp_auth_error_compatibility.feature

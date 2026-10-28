@@ -43,8 +43,13 @@ blocks:
         db:
           matrix: [sqlite, postgres, sqlserver]
         addPoliciesFrom: policies
+        overlay: overlays/mcp-jwt-auth.toml
       - name: testbench
     runners:
-      - name: mcp-authz
+      - name: mcp-authz-policy
+        tags: "gateway-version>1.2.0"
         features:
           - features/mcp_authz.feature
+      - name: mcp-authz
+        features:
+          - features/mcp_authz_error_compatibility.feature

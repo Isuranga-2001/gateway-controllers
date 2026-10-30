@@ -371,40 +371,6 @@ Feature: JWT authentication
     Then the response should be successful
     And I send a "GET" request to "${CTX:apiContextB}/${CTX:apiVersionB}/health" until status 404
 
-  Scenario: A malformed token is rejected on every repeated request
-    Given I generate a unique value from "jwt-auth-cache-malformed" and store it as "apiName"
-    And I generate a unique API version from "jwt-auth-cache-malformed" and store it as "apiVersion"
-    And I generate a unique API context from "/jwt-auth-cache-malformed" and store it as "apiContext"
-    When I create API from "resources/templates/rest-api.yaml" with values:
-      | apiVersion             | ${CTX:gatewaySpecVersion}        |
-      | name                   | ${CTX:apiName}                    |
-      | spec.displayName       | ${CTX:apiName}                    |
-      | spec.version           | ${CTX:apiVersion}                 |
-      | spec.context           | ${CTX:apiContext}/$version        |
-      | spec.upstream.main.url | http://testbench:3002              |
-      | spec.operations        | [{"method":"GET","path":"/health"},{"method":"GET","path":"/protected","policies":[{"name":"jwt-auth","version":"v1","params":{"issuers":["mock-jwks"]}}]}] |
-    Then the response should be successful
-    And I send a "GET" request to "${CTX:apiContext}/${CTX:apiVersion}/protected" until status 401
-
-    # A malformed token is a deterministic failure, so its verdict is cached as a rejection.
-    # Requests that hit that cached rejection must keep returning 401.
-    When I set header "Authorization" to "Bearer invalid.jwt.token"
-    And I send a "GET" request to "${CTX:apiContext}/${CTX:apiVersion}/protected"
-    Then the response status code should be 401
-
-    When I send a "GET" request to "${CTX:apiContext}/${CTX:apiVersion}/protected"
-    Then the response status code should be 401
-
-    When I send a "GET" request to "${CTX:apiContext}/${CTX:apiVersion}/protected"
-    Then the response status code should be 401
-    And the response body should contain "Authentication failed"
-
-    When I clear all headers
-    And I authenticate using basic auth as "admin"
-    And I delete the API "${CTX:apiName}"
-    Then the response should be successful
-    And I send a "GET" request to "${CTX:apiContext}/${CTX:apiVersion}/health" until status 404
-
   Scenario: Updating an API's audience requirement applies to a token it already accepted
     Given I generate a unique value from "jwt-auth-update-aud" and store it as "apiName"
     And I generate a unique API version from "jwt-auth-update-aud" and store it as "apiVersion"

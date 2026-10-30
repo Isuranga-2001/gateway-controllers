@@ -48,6 +48,14 @@ blocks:
       - name: testbench
       - name: redis
     runners:
-      - name: semantic-cache
+      - name: semantic-cache-policy
+        tags: "gateway-version>=1.2.0"
         features:
           - features/semantic_cache.feature
+      - name: semantic-cache-isolation
+        tags: "gateway-version>=1.2.0"
+        features:
+          - features/semantic_cache_isolation.feature
+      - name: semantic-cache
+        features:
+          - features/semantic_cache_error_compatibility.feature

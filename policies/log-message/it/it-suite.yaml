@@ -43,6 +43,7 @@ blocks:
         db:
           matrix: [sqlite, postgres, sqlserver]
         addPoliciesFrom: policies
+        overlay: overlays/logging.toml
       - name: testbench
     runners:
       - name: log-message

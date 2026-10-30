@@ -12,7 +12,10 @@ canonical resource templates and the code that runs a suite. They began as copie
 [test framework's](https://github.com/wso2/api-platform/tree/main/tests/framework) Platform Gateway
 steps and are owned here, so a policy's tests never need api-platform's step code. The framework
 itself, a Go module published by api-platform, supplies the engine that boots the containers and is
-pinned in each suite's `go.mod`; its testbench image is pulled from GHCR on the first run.
+recorded in each suite's `go.mod`. In CI each suite runs on the newest framework release unless the
+policy's `it/framework-version` says otherwise (see
+[the framework dependency](CLAUDE.md#the-framework-dependency)); its testbench image is pulled from
+GHCR on the first run.
 
 **[CLAUDE.md](CLAUDE.md) is the guide**: how to run the tests, how to add tests to a policy that
 has none, how to write scenarios and steps, and what a pull request runs.
@@ -22,13 +25,14 @@ has none, how to write scenarios and steps, and what a pull request runs.
 ```
 policies/<name>/it/
   it-suite.yaml      the suite: the gateway it boots, databases, runners
+  framework-version  optional: how CI follows framework releases (latest, the default, minor or pinned)
   features/          Gherkin feature files
   steps/             step definitions only this policy needs
   suite_test.go      test entry; runs the suite through tests/it/common/suite
   go.mod, go.sum     the suite's Go module
   resources/         templates that differ from the shared ones (added when needed)
 tests/it/
-  go.mod             the shared module: pins the framework
+  go.mod             the shared module: records the framework version
   common/steps/      step definitions every policy shares
   common/resources/  canonical resource templates every policy shares
   common/suite/      runs one policy's suite

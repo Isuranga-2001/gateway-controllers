@@ -20,6 +20,7 @@ tests needs only that policy's folder and the shared code in `tests/it/common`.
 | The code that builds the gateway the suites boot | `tests/it/common/gateway/`, `tests/it/cmd/build-gateway/` |
 | The code that runs the blocks of the selected suites, several at a time | `tests/it/common/runsuites/`, `tests/it/cmd/run-suites/` |
 | Selecting the policies a pull request runs | `scripts/it/changed-policies.py` |
+| Choosing the framework version of each selected policy | `policies/<name>/it/framework-version`, `scripts/it/resolve-framework-versions.py` |
 | The run summary of the time each suite took | `scripts/it/render-timeline.py` |
 | The pull request workflow | `.github/workflows/it.yml` |
 
@@ -39,7 +40,7 @@ test dependencies never reach the policy's own `go.mod`, and the gateway build a
 release both leave `it/` out.
 
 The engine that boots the containers (topology, components, the runner, the testbench) is the test
-framework, a Go module published by api-platform and pinned in each suite's `go.mod`
+framework, a Go module published by api-platform and recorded in each suite's `go.mod`
 (`github.com/wso2/api-platform/tests/framework`). The step definitions and the canonical templates
 are not imported from it. `tests/it/common` holds copies of the framework's Platform Gateway
 steps, trimmed to what a gateway policy needs (no Platform API, API portal or AI workspace steps),
@@ -137,7 +138,9 @@ A policy without `it/it-suite.yaml` has no integration tests, and the pull reque
 4. Run `make it POLICIES=<name> GATEWAY_VERSION=1.2.0`, then the same for `1.1.0` and `latest`, then
    `make it-standards POLICIES=<name>`.
 5. Commit the `it/` folder with the policy change. A pull request that changes any file in the
-   policy's folder now runs these tests on all three gateway versions.
+   policy's folder now runs these tests on all three gateway versions. The suite follows the newest
+   framework release in CI without any setup; add `it/framework-version` only to choose another
+   mode (see "The framework dependency").
 
 ## Write the scenarios
 
@@ -194,28 +197,63 @@ policies that depend on one of them through a `go.mod` require, limited to polic
 `it/it-suite.yaml`. A change to the workflow, these scripts, `tests/it` or the Makefile runs the
 smoke policy instead. One workflow run builds the gateway once for each of gateway 1.2.0, 1.1.0 and
 latest and executes the suite of every selected policy on it, each on all three databases (SQL
-Server only from 1.2.0). The standards check runs on the shared steps and on the selected policies'
-steps, features and suite file. A manual run takes `policies` (comma-separated, or `all`).
+Server only from 1.2.0). Before the suites run, the workflow resolves the framework version of every
+selected policy (see "The framework dependency") and provides the testbench image of each resolved
+version. The standards check runs on the shared steps and on the selected policies' steps, features
+and suite file. A manual run takes `policies` (comma-separated, or `all`).
 
 ## The framework dependency
 
-- Every suite's `go.mod` pins the framework version, and `tests/it/go.mod` pins it for the shared
-  steps. Update them together: `go get github.com/wso2/api-platform/tests/framework@vX.Y.Z` and
-  `go mod tidy` in `tests/it` and in each `policies/<name>/it`, then run the suites. The testbench
-  image, `ghcr.io/wso2/api-platform/testbench:<version>`, follows the version the suite's `go.mod`
-  pins: `tests/it/common/suite` sets it, and it is pulled on the first run. When the image cannot
-  be pulled, build it from the pinned module's source, as the workflow's "Provide the testbench
-  image" step does:
-  `dir=$(cd tests/it && go list -m -f '{{.Dir}}' github.com/wso2/api-platform/tests/framework)`
-  then `docker build -f "$dir/testbench/Dockerfile" -t ghcr.io/wso2/api-platform/testbench:<version> "$dir"`.
-  Set `APIP_IT_IMAGE_TESTBENCH` to use any other image.
+The framework is the Go module `github.com/wso2/api-platform/tests/framework`. Every suite's `go.mod`
+records one exact version of it, and `tests/it/go.mod` records the one the shared steps use. A
+`go.mod` cannot say "latest"; only `go get` moves a module to a newer release.
+
+**How CI picks the version.** Before the suites run, `scripts/it/resolve-framework-versions.py` reads
+`policies/<name>/it/framework-version` for each selected policy and runs `go get` in that policy's
+`it` module. The result exists only in the workflow's checkout; nothing is committed back. The file
+holds one mode, on the first line that is not blank or a `#` comment:
+
+| Mode | The suite runs on |
+| --- | --- |
+| `latest` | The newest framework release overall. This is the default, also when the file is missing or empty. |
+| `minor` | The newest release of the minor line its `go.mod` pins: v0.4.1 becomes the newest v0.4.x. |
+| `pinned` | The version already in its `go.mod`, unchanged. |
+
+Any other value fails the run with an error that names the file. The workflow log shows the result per
+policy, for example `cors: latest, framework v0.4.1 -> v0.4.2`.
+
+- A policy that follows `latest` runs on a new framework release as soon as it is tagged, so a release
+  that breaks a suite fails the suites of every policy that follows `latest` at once. Fix the step or
+  scenario, or set `pinned` in that policy's `framework-version` while you do.
+- Go uses the highest framework version among the policy's module and `tests/it`, which the policy
+  requires through a `replace`, so a policy cannot resolve below the version `tests/it/go.mod` records.
+  A module that replaces the framework with a local path is not changed by `go get`.
+- A local `make it` or `go test` uses the `go.mod` version as it is. To see what CI would resolve,
+  run `python3 scripts/it/resolve-framework-versions.py <policy>` in a throwaway checkout; it edits
+  `go.mod` and `go.sum`, which you should not commit.
+- To move the recorded versions yourself, which `pinned` policies need and which keeps `go.mod` close
+  to the releases, update them together: `go get github.com/wso2/api-platform/tests/framework@vX.Y.Z`
+  and `go mod tidy` in `tests/it` and in each `policies/<name>/it`, then run the suites.
+
+**The testbench image.** `ghcr.io/wso2/api-platform/testbench:<version>` follows the version the
+suite's module resolves to: `tests/it/common/suite` sets it, and it is pulled on the first run. The
+workflow's "Provide the testbench images" step provides the image of each distinct resolved version
+before the suites run, pulling it when this repository can and otherwise building it from that
+module's source. To do the same by hand:
+`dir=$(cd tests/it && go list -m -f '{{.Dir}}' github.com/wso2/api-platform/tests/framework)`
+then `docker build -f "$dir/testbench/Dockerfile" -t ghcr.io/wso2/api-platform/testbench:<version> "$dir"`.
+Set `APIP_IT_IMAGE_TESTBENCH` to use any other image.
 
 ## Troubleshooting
 
 - `testbench/manifests/...: unauthorized` when a suite boots, followed by "executed NO scenarios":
   the testbench image could not be pulled, so no block booted. Build it as described under "The
-  framework dependency", and check the tag in the message against the framework version in
-  `go.mod`.
+  framework dependency", and check the tag in the message against the framework version the
+  suite's module resolves to.
+- A suite fails in CI after a framework release although nothing changed in the repository: the
+  policy follows `latest`. The log line `<policy>: latest, framework vA -> vB` of the "Resolve the
+  framework version" step names the new version. Fix the suite, or set `pinned` in the policy's
+  `it/framework-version` while you do.
 - `failed to connect to the docker API` or `rootless Docker not found`: Docker is not running, or
   `DOCKER_HOST` and `TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE` are not set for Rancher Desktop or
   Colima.

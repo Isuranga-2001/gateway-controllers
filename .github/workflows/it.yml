@@ -52,6 +52,7 @@ jobs:
           python3 scripts/it/test_changed_policies.py
           python3 scripts/it/test_scaffold.py
           python3 scripts/it/test_render_timeline.py
+          python3 scripts/it/test_resolve_framework_versions.py
           if [[ -n "$REQUESTED_POLICIES" ]]; then
             python3 scripts/it/changed-policies.py --policies "$REQUESTED_POLICIES"
           else
@@ -123,25 +124,44 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
 
+      # A policy's it/framework-version file picks how its suite follows framework releases:
+      # latest (the default), minor (newest patch of the line its go.mod pins) or pinned.
+      - name: Resolve the framework version of each selected policy
+        working-directory: gateway-controllers
+        env:
+          POLICIES: ${{ needs.detect.outputs.policies }}
+        run: python3 scripts/it/resolve-framework-versions.py "$POLICIES"
+
       # One run per gateway version builds the gateway once, from every policy of the repository on
       # the base images of that version, then executes the suite of every selected policy in turn
       # against that build and fails if any of them fails.
-      # The suites run on the testbench image published with the pinned framework release. Pull it
-      # when this repository can, and otherwise build the same image from the pinned module's
-      # source, which is what the release publishes.
-      - name: Provide the testbench image
-        working-directory: gateway-controllers/tests/it
+      # Each suite runs on the testbench image published with the framework release its go.mod
+      # resolves to. Pull it when this repository can, and otherwise build the same image from that
+      # module's source, which is what the release publishes.
+      - name: Provide the testbench images
+        working-directory: gateway-controllers
+        env:
+          POLICIES: ${{ needs.detect.outputs.policies }}
         run: |
           set -euo pipefail
           module=github.com/wso2/api-platform/tests/framework
-          go mod download "$module"
-          version="$(go list -m -f '{{.Version}}' "$module")"
-          image="ghcr.io/wso2/api-platform/testbench:${version#v}"
-          if docker pull "$image"; then
-            exit 0
-          fi
-          dir="$(go list -m -f '{{.Dir}}' "$module")"
-          docker build -f "$dir/testbench/Dockerfile" -t "$image" "$dir"
+          declare -A provided=()
+          IFS=',' read -r -a policies <<< "$POLICIES"
+          for policy in "${policies[@]}"; do
+            [[ -n "$policy" ]] || continue
+            pushd "policies/${policy}/it" > /dev/null
+            version="$(go list -m -f '{{.Version}}' "$module")"
+            if [[ -z "${provided[$version]:-}" ]]; then
+              provided[$version]=1
+              go mod download "$module"
+              image="ghcr.io/wso2/api-platform/testbench:${version#v}"
+              if ! docker pull "$image"; then
+                dir="$(go list -m -f '{{.Dir}}' "$module")"
+                docker build -f "$dir/testbench/Dockerfile" -t "$image" "$dir"
+              fi
+            fi
+            popd > /dev/null
+          done
 
       - name: Run the integration suites of the selected policies
         working-directory: gateway-controllers

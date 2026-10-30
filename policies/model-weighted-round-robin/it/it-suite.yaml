@@ -45,3 +45,7 @@ blocks:
       - name: model-weighted-round-robin
         features:
           - features/model_weighted_round_robin.feature
+      - name: model-weighted-round-robin-multi-provider
+        tags: "gateway-version>=1.2.0"
+        features:
+          - features/model_weighted_round_robin_multi_provider.feature

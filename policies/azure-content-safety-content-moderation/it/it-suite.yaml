@@ -43,6 +43,9 @@ blocks:
         overlay: overlays/gateway.toml
       - name: testbench
     runners:
+      - name: azure-content-safety
+        features:
+          - features/azure_content_safety.feature
       - name: azure-content-safety-content-moderation
         features:
           - features/azure_content_safety_content_moderation.feature

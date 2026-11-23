@@ -108,13 +108,11 @@ make it-coverage POLICIES=<name> DB=sqlite     # run the suites with coverage, w
 make coverage-summary                          # the policy-wise percentages and the global figure
 ```
 
-The coverage of a policy is the part of its code that the integration scenarios run. Every suite runs on a
-gateway that carries all the policies, so the code of a policy counts as covered whichever suite ran it.
-A policy without `it/it-suite.yaml` can therefore show more than 0%: other suites attach it to their APIs
-(set-headers, remove-headers), and code that runs when the gateway starts, such as a package `init`
-(mcp-tool-schema-validator), is hit by every block. That figure does not mean the policy has tests; only
-a policy's own suite counts towards the 80% minimum. `make it-coverage` with `POLICIES=<name>` builds the
-gateway with every policy but runs only that suite, which shows what the suite alone covers. `make it-coverage`
+The coverage of a policy is the part of its code that its own integration scenarios run. Every suite
+runs on a gateway that carries all the policies, so the counters of a run also record policies the
+suite merely uses (set-headers on another policy's API) and code that runs when the gateway starts.
+The report does not credit those: it takes a policy's counters from the runs its own suite started,
+and a policy without `it/it-suite.yaml` reports 0%. `make it-coverage`
 is `make it` on the latest gateway with three additions, none of which touch the framework:
 
 - `build-gateway -coverage` has the gateway-builder compile the policy engine with every policy's
@@ -127,8 +125,13 @@ is `make it` on the latest gateway with three additions, none of which touch the
 - The framework removes a block's containers at its end, and its own coverage collector works only
   for gateways it builds from source. So `run-suites` starts, beside each runtime container, a small
   helper that mounts the runtime's `/coverage` volume (`tests/it/common/itcoverage`). The volume
-  outlives the runtime, and the counters are copied out of the helpers when the run ends.
-  `scripts/coverage/it-coverage-report.sh` merges them into `coverage/coverage.txt`.
+  outlives the runtime, and the counters are copied out of the helpers when the run ends. The helper
+  also finds which block the runtime belongs to, from the block label on its network, and so which
+  policy's suite started it; the counters are copied into `<raw>/<policy>/<n>/`.
+  `scripts/coverage/it-coverage-report.sh` merges each policy's runs and `own-suite-profile.py` takes
+  every policy's lines from its own suite's merge alone, with 0 for a policy that has no suite, into
+  `coverage/coverage.txt`. Block names must therefore be unique across the suites of a run, and
+  `run-suites` refuses a name that two suites share.
 
 The folder given to `run-suites -coverage-out` (`IT_COVERAGE_DIR`) must be missing or empty, because the
 report merges everything beneath it: the run refuses a folder that holds counters of an earlier run

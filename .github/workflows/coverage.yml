@@ -73,6 +73,7 @@ jobs:
       - name: Check the coverage tooling
         run: |
           python3 scripts/coverage/test_summarize_coverage.py
+          python3 scripts/coverage/test_own_suite_profile.py
           make validate-codecov-config
 
       - name: Raise the conntrack table limit

@@ -108,7 +108,13 @@ make it-coverage POLICIES=<name> DB=sqlite     # run the suites with coverage, w
 make coverage-summary                          # the policy-wise percentages and the global figure
 ```
 
-The coverage of a policy is the part of its code that the integration scenarios run. `make it-coverage`
+The coverage of a policy is the part of its code that the integration scenarios run. Every suite runs on a
+gateway that carries all the policies, so the code of a policy counts as covered whichever suite ran it.
+A policy without `it/it-suite.yaml` can therefore show more than 0%: other suites attach it to their APIs
+(set-headers, remove-headers), and code that runs when the gateway starts, such as a package `init`
+(mcp-tool-schema-validator), is hit by every block. That figure does not mean the policy has tests; only
+a policy's own suite counts towards the 80% minimum. `make it-coverage` with `POLICIES=<name>` builds the
+gateway with every policy but runs only that suite, which shows what the suite alone covers. `make it-coverage`
 is `make it` on the latest gateway with three additions, none of which touch the framework:
 
 - `build-gateway -coverage` has the gateway-builder compile the policy engine with every policy's

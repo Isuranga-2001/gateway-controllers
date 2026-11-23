@@ -133,6 +133,14 @@ is `make it` on the latest gateway with three additions, none of which touch the
   `coverage/coverage.txt`. Block names must therefore be unique across the suites of a run, and
   `run-suites` refuses a name that two suites share.
 
+In CI the latest-gateway leg of `.github/workflows/it.yml` is the coverage run: it builds the gateway with
+coverage (`IT_COVERAGE_DIR=coverage/raw`), runs every suite on every database as it does for the gate,
+and then merges the counters, summarises them, uploads them to Codecov and, for a pull request from
+this repository, posts the policy-wise table as a comment (the separate `coverage-comment` job, which
+holds the write permission and runs no code of the pull request). The reporting steps never fail the job,
+but a run whose counters could not all be collected does. `.github/workflows/coverage.yml` runs the same
+on `main` only, on SQLite, to keep the baseline Codecov compares pull requests with.
+
 The folder given to `run-suites -coverage-out` (`IT_COVERAGE_DIR`) must be missing or empty, because the
 report merges everything beneath it: the run refuses a folder that holds counters of an earlier run
 instead of counting them again. `make it-coverage` empties `coverage/raw` for you. A run whose counters
